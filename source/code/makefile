@@ -11,7 +11,11 @@
 #  and limitations under the License.                                                                                #
 ######################################################################################################################
 
-s3bucket=s3://$(bucket)/
+# locally running call to deploy
+# make deploy bucket=matth-aws-instance-scheduler-590312749310 solution=matt-aws-instance-scheduler version=`cat version.txt`
+
+# hardcoded region to get cfn template to run successfully
+s3bucket=s3://$(bucket)-ap-southeast-2/
 
 pydirs= configuration configuration/setbuilders requesthandlers schedulers util boto_retry
 py=$(foreach dir, $(pydirs), $(wildcard $(dir)/*.py))
@@ -59,6 +63,8 @@ lambda:$(py) main.py version.txt
 	zip -r $(zip) chardet
 	zip -r $(zip) idna
 	zip -r $(zip) certifi
+	zip -r $(zip) boto3
+	zip -r $(zip) botocore
 ######################################################################################################################
 # cli                                                                                                                #
 ######################################################################################################################
@@ -83,6 +89,8 @@ scheduler-cli:$(pycli) version.txt
 	rm cli/setup.py
 	mv cli/setup.org cli/setup.py
 
+	# 'creating' missing '-latest' version...
+	cp $(regional_assets_dir)/scheduler-cli.zip $(deployment)/scheduler-cli-latest.zip
 
 ######################################################################################################################
 # cloudformation templates                                                                                           #
@@ -99,29 +107,34 @@ cfn:version.txt $(templates)
 	python ./build-instance-scheduler-template.py ../cloudformation/instance-scheduler.template  $(bucket) $(solution) $(version) > $(global_assets_dir)/instance-scheduler.template
 	python ./build-instance-scheduler-template.py ../cloudformation/instance-scheduler-remote.template  $(bucket) $(solution) $(version) > $(global_assets_dir)/instance-scheduler-remote.template
 
+	# new lines to fix deployment
+	cp $(global_assets_dir)/instance-scheduler.template $(deployment)/instance-scheduler-latest.template
+	cp $(global_assets_dir)/instance-scheduler-remote.template $(deployment)/instance-scheduler-remote-latest.template
 
 ######################################################################################################################
 # Deploy to S3                                                                                                       #
 ######################################################################################################################
 
 deploy: lambda cfn scheduler-cli
-	aws s3 cp $(deployment)/instance-scheduler-latest.template $(s3bucket)$(prefix)  --acl public-read
-	aws s3 cp $(deployment)/instance-scheduler-latest.template $(s3bucket)  --acl public-read
+	# removing the public-read acl flag
+	# aws s3 cp $(deployment)/instance-scheduler-latest.template $(s3bucket)$(prefix)  --acl public-read
+	# aws s3 cp $(deployment)/instance-scheduler-latest.template $(s3bucket)  --acl public-read
 
-	aws s3 cp $(deployment)/instance-scheduler-remote-latest.template $(s3bucket)$(prefix)  --acl public-read
-	aws s3 cp $(deployment)/instance-scheduler-remote-latest.template $(s3bucket)  --acl public-read
+	# aws s3 cp $(deployment)/instance-scheduler-remote-latest.template $(s3bucket)$(prefix)  --acl public-read
+	# aws s3 cp $(deployment)/instance-scheduler-remote-latest.template $(s3bucket)  --acl public-read
 
-	aws s3 cp $(zip) $(s3bucket)$/$(prefix)  --acl public-read
-	aws s3 cp $(zip_cli) $(s3bucket)$(prefix) --acl public-read
-	aws s3 cp $(deployment)/scheduler-cli-latest.zip $(s3bucket) --acl public-read
+	# aws s3 cp $(zip) $(s3bucket)$/$(prefix)  --acl public-read
+	# aws s3 cp $(zip_cli) $(s3bucket)$(prefix) --acl public-read
+	# aws s3 cp $(deployment)/scheduler-cli-latest.zip $(s3bucket) --acl public-read
 
-	python update-build-number.py version.txt
+	aws s3 cp $(deployment)/instance-scheduler-latest.template $(s3bucket)$(prefix)
+	aws s3 cp $(deployment)/instance-scheduler-latest.template $(s3bucket)
 
+	aws s3 cp $(deployment)/instance-scheduler-remote-latest.template $(s3bucket)$(prefix)
+	aws s3 cp $(deployment)/instance-scheduler-remote-latest.template $(s3bucket)
 
-
-
-
-
-
-
+	aws s3 cp $(zip) $(s3bucket)$/$(prefix)
+	aws s3 cp $(zip_cli) $(s3bucket)$(prefix)
+	aws s3 cp $(deployment)/scheduler-cli-latest.zip $(s3bucket)
 	
+	python update-build-number.py version.txt

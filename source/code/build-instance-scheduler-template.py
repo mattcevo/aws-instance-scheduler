@@ -18,6 +18,9 @@ from collections import OrderedDict
 
 
 def get_versioned_template(template_filename, bucket, solution, version):
+    # replacing '.' with '-' to allow appending KMS key
+    version = str.replace(version, '.', '-')
+    
     with open(template_filename, "rt") as f:
         template_text = "".join(f.readlines())
         template_text = template_text.replace("%bucket%", bucket)

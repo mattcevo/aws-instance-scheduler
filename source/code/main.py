@@ -53,7 +53,8 @@ def lambda_handler(event, context):
         with Logger(logstream=log_stream, buffersize=20, context=context,
                     debug=util.as_bool(os.getenv(configuration.ENV_TRACE, False))) as logger:
 
-            logger.info("InstanceScheduler, version {}".format(VERSION))
+            # logger.info("InstanceScheduler, Running locally!!")
+            # logger.info("InstanceScheduler, version {}".format(VERSION))
 
             logger.debug("Event is {}", util.safe_json(event, indent=3))
 
@@ -62,6 +63,8 @@ def lambda_handler(event, context):
                                  ScheduleResourceHandler,
                                  AdminCliRequestHandler,
                                  CloudWatchEventHandler]:
+
+                # logger.info("handler_type: {}", handler_type)
 
                 if handler_type.is_handling_request(event):
                     start = time()

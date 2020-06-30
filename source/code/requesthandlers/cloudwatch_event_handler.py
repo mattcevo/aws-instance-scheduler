@@ -16,6 +16,8 @@ import os
 from copy import copy
 from datetime import datetime
 
+import boto3
+
 import configuration
 from boto_retry import get_client_with_retries
 from configuration.scheduler_config_builder import SchedulerConfigBuilder
@@ -250,16 +252,33 @@ class CloudWatchEventHandler:
             ", ".join(self.configuration.scheduled_services), ", ".join(account_names),
             ", ".join(self.configuration.regions)))
 
+# debug remove
+        # print ('CloudWatchEventHandler - self.configuration.scheduled_services: {}', self.configuration.scheduled_services)
+
+        print ('\n\n#############################################')
+        print ('boto3.__version__ : {} ', boto3.__version__)
+        print ('#############################################\n\n')
+
+        self._logger.info('\n\n#############################################')
+        self._logger.info('boto3.__version__ : {}', boto3.__version__)
+        self._logger.info('#############################################\n\n')
+
         for service in self.configuration.scheduled_services:
-            service_strategy = SCHEDULER_TYPES[service]()
-            scheduler = InstanceScheduler(service=service_strategy, scheduler_configuration=self.configuration)
-            s = "-".join([LOG_STREAM_PREFIX, "-".join(account_names), service, "-".join(self.configuration.regions)])
-            dt = datetime.utcnow()
-            logstream = LOG_STREAM.format(s, dt.year, dt.month, dt.day)
-            with Logger(logstream=logstream, buffersize=60 if self.configuration.trace else 30, context=self._context,
-                        debug=self.configuration.trace) as logger:
-                result[service] = scheduler.run(state_table=self.state_table, scheduler_config=self.configuration,
-                                                lambda_account=self.lambda_account, logger=logger, context=self._context)
+            
+            if (service == 'redshift'):     # remove to re-enable rds and ec2
+                print ('#############################################')
+                print ('CloudWatchEventHandler - service: {} ', service)
+                print ('#############################################\n\n')
+
+                service_strategy = SCHEDULER_TYPES[service]()
+                scheduler = InstanceScheduler(service=service_strategy, scheduler_configuration=self.configuration)
+                s = "-".join([LOG_STREAM_PREFIX, "-".join(account_names), service, "-".join(self.configuration.regions)])
+                dt = datetime.utcnow()
+                logstream = LOG_STREAM.format(s, dt.year, dt.month, dt.day)
+                with Logger(logstream=logstream, buffersize=60 if self.configuration.trace else 30, context=self._context,
+                            debug=self.configuration.trace) as logger:
+                    result[service] = scheduler.run(state_table=self.state_table, scheduler_config=self.configuration,
+                                                    lambda_account=self.lambda_account, logger=logger, context=self._context)
         self._logger.info(INF_SCHEDULER_RESULT, json.dumps(result,indent=3))
         return result
 
@@ -270,8 +289,16 @@ class CloudWatchEventHandler:
                           "-".join(self.account_names(conf)),
                           "-".join(conf.regions))
 
+        self._logger.info('#############################################')
+        self._logger.info('boto3.__version__ : {}', boto3.__version__)
+        self._logger.info('#############################################\n\n')
+
         # need to convert configuration to dictionary to allow it to be passed in event
         config = SchedulerConfigBuilder.configuration_as_dict(conf)
+
+        self._logger.info('#############################################')
+        self._logger.info('config : {}', str(config))
+        self._logger.info('#############################################\n\n')
 
         payload = str.encode(json.dumps({
             "action": "scheduler:run",

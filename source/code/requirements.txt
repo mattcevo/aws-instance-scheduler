@@ -1,2 +1,3 @@
 pytz
 requests
+boto3 >= 1.14.8

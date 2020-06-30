@@ -16,9 +16,10 @@
             "AllowedValues": [
                 "EC2",
                 "RDS",
-                "Both"
+                "REDSHIFT",
+                "All"
             ],
-            "Default": "EC2",
+            "Default": "All",
             "Description": "Scheduled Services."
         },
         "ScheduleRdsClusters": {
@@ -108,7 +109,7 @@
         },
         "DefaultTimezone": {
             "Type": "String",
-            "Default": "UTC",
+            "Default": "Australia/Melbourne",
             "AllowedValues": [
                 "Africa/Abidjan",
                 "Africa/Accra",
@@ -542,7 +543,7 @@
                 "US/Pacific",
                 "UTC"
             ],
-            "Description": "Choose the default Time Zone. Default is 'UTC'"
+            "Description": "Choose the default Time Zone. Default is now 'Australia/Melbourne' not 'UTC'"
         },
         "Regions": {
             "Type": "CommaDelimitedList",
@@ -554,11 +555,13 @@
         },
         "StartedTags": {
             "Type": "String",
-            "Description": "Comma separated list of tagname and values on the formt name=value,name=value,.. that are set on started instances"
+            "Description": "Comma separated list of tagname and values on the formt name=value,name=value,.. that are set on started instances", 
+            "Default": "state=started"
         },
         "StoppedTags": {
             "Type": "String",
-            "Description": "Comma separated list of tagname and values on the formt name=value,name=value,.. that are set on stopped instances"
+            "Description": "Comma separated list of tagname and values on the formt name=value,name=value,.. that are set on stopped instances",
+            "Default": "state=stopped"
         },
         "SchedulerFrequency": {
             "Type": "String",
@@ -589,7 +592,7 @@
                 "Yes",
                 "No"
             ],
-            "Default": "Yes",
+            "Default": "No",
             "Description": "Send Anonymous Metrics Data."
         }
     },
@@ -714,8 +717,11 @@
             "RDS": {
                 "Value": "rds"
             },
-            "Both": {
-                "Value": "ec2,rds"
+            "REDSHIFT": {
+                "Value": "redshift"
+            },
+            "All": {
+                "Value": "ec2,rds,redshift"
             }
         },
         "Timeouts": {
@@ -761,251 +767,48 @@
                 "KeyPolicy": {
                     "Statement": [
                         {
-                            "Sid": "default",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
+                        "Sid": "default",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": { 
+                                "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+                            }
+                        },
+                        "Action": "kms:*",
+                        "Resource": "*"
                         },
                         {
-                            "Sid": "Allows use of key",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::GetAtt": [
-                                        "SchedulerRole",
-                                        "Arn"
-                                    ]
-                                }
-                            },
-                            "Action": [
-                                "kms:GenerateDataKey*",
-                                "kms:Decrypt"
-                            ],
-                            "Resource": "*"
+                        "Sid": "Allows use of key",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": {
+                                "Fn::GetAtt": [
+                                    "SchedulerRole",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        "Action": [
+                            "kms:GenerateDataKey*",
+                            "kms:Decrypt"
+                        ],
+                        "Resource": "*"
                         }
                     ]
                 }
             }
         },
+
         "InstanceSchedulerEncryptionKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/instance-scheduler-encryption-key",
+                "AliasName": "alias/instance-scheduler-encryption-key-%version%",
                 "TargetKeyId": {
                     "Ref": "InstanceSchedulerEncryptionKey"
                 }
             }
         },
 
-        "EC2DynamoDBPolicy": {
-            "Type": "AWS::IAM::Policy",
-            "Metadata": {
-                "cfn_nag": {
-                    "rules_to_suppress": [
-                        {
-                            "id": "W12",
-                            "reason": "All policies have been scoped to be as restrictive as possible. This solution needs to access ec2/rds resources across all regions."
-                        }
-                    ]
-                }
-            },
-            "Properties": {
-                 "PolicyName": "EC2DynamoDBPolicy",
-                "Roles": [
-                    {
-                        "Ref": "SchedulerRole"
-                    }
-                ],
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                       {
-                            "Effect": "Allow",
-                            "Action": [
-                                "dynamodb:DeleteItem",
-                                "dynamodb:GetItem",
-                                "dynamodb:PutItem",
-                                "dynamodb:Query",
-                                "dynamodb:Scan",
-                                "dynamodb:BatchWriteItem"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            {
-                                                "Fn::Join": [
-                                                    ":",
-                                                    [
-                                                        "arn:aws:dynamodb",
-                                                        {
-                                                            "Ref": "AWS::Region"
-                                                        },
-                                                        {
-                                                            "Ref": "AWS::AccountId"
-                                                        },
-                                                        "table/"
-                                                    ]
-                                                ]
-                                            },
-                                            {
-                                                "Ref": "StateTable"
-                                            }
-                                        ]
-                                    ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            {
-                                                "Fn::Join": [
-                                                    ":",
-                                                    [
-                                                        "arn:aws:dynamodb",
-                                                        {
-                                                            "Ref": "AWS::Region"
-                                                        },
-                                                        {
-                                                            "Ref": "AWS::AccountId"
-                                                        },
-                                                        "table/"
-                                                    ]
-                                                ]
-                                            },
-                                            {
-                                                "Ref": "ConfigTable"
-                                            }
-                                        ]
-                                    ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            {
-                                                "Fn::Join": [
-                                                    ":",
-                                                    [
-                                                        "arn:aws:dynamodb",
-                                                        {
-                                                            "Ref": "AWS::Region"
-                                                        },
-                                                        {
-                                                            "Ref": "AWS::AccountId"
-                                                        },
-                                                        "table/"
-                                                    ]
-                                                ]
-                                            },
-                                            {
-                                                "Ref": "MaintenanceWindowTable"
-                                            }
-                                        ]
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "logs:CreateLogGroup",
-                                "logs:CreateLogStream",
-                                "logs:PutLogEvents",
-                                "logs:PutRetentionPolicy"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Join": [
-                                        ":",
-                                        [
-                                            "arn:aws:logs",
-                                            {
-                                                "Ref": "AWS::Region"
-                                            },
-                                            {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "log-group",
-                                            {
-                                                "Ref": "SchedulerLogGroup"
-                                            },
-                                            "*"
-                                        ]
-                                    ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        ":",
-                                        [
-                                            "arn:aws:logs",
-                                            {
-                                                "Ref": "AWS::Region"
-                                            },
-                                            {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "log-group:/aws/lambda/*"
-                                        ]
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "logs:DescribeLogStreams",
-                                "rds:DescribeDBClusters",
-                                "rds:DescribeDBInstances",
-                                "ec2:DescribeInstances",
-                                "ec2:DescribeRegions",
-                                "ec2:ModifyInstanceAttribute",
-                                "cloudwatch:PutMetricData",
-                                "ssm:DescribeMaintenanceWindows",
-                                "tag:GetResources"
-                            ],
-                            "Resource": [
-                                "*"
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "sts:AssumeRole"
-                            ],
-                            "Resource": [
-                                "arn:aws:iam::*:role/*EC2SchedulerCross*"
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "ssm:GetParameter",
-                                "ssm:GetParameters"
-                            ],
-                            "Resource": {
-                                "Fn::Join": [
-                                    ":",
-                                    [
-                                        "arn:aws:ssm:*",
-                                        {
-                                            "Ref": "AWS::AccountId"
-                                        },
-                                        "parameter/*"
-                                    ]
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
         "SchedulerPolicy": {
             "Type": "AWS::IAM::Policy",
             "Metadata": {
@@ -1026,156 +829,315 @@
                     }
                 ],
                 "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "rds:DeleteDBSnapshot",
-                                "rds:DescribeDBSnapshots",
-                                "rds:StopDBInstance"
-                            ],
-                            "Resource": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents",
+                            "logs:PutRetentionPolicy"
+                        ],
+                        "Resource": [
+                            {
                                 "Fn::Join": [
                                     ":",
                                     [
-                                        "arn:aws:rds:*",
+                                        "arn:aws:logs",
+                                        {
+                                            "Ref": "AWS::Region"
+                                        },
                                         {
                                             "Ref": "AWS::AccountId"
                                         },
-                                        "snapshot:*"
+                                        "log-group",
+                                        {
+                                            "Ref": "SchedulerLogGroup"
+                                        },
+                                        "*"
                                     ]
                                 ]
-                            }
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "rds:AddTagsToResource",
-                                "rds:RemoveTagsFromResource",
-                                "rds:DescribeDBSnapshots",
-                                "rds:StartDBInstance",
-                                "rds:StopDBInstance"
-                            ],
-                            "Resource": {
+                            },
+                            {
                                 "Fn::Join": [
                                     ":",
                                     [
-                                        "arn:aws:rds:*",
+                                        "arn:aws:logs",
+                                        {
+                                            "Ref": "AWS::Region"
+                                        },
                                         {
                                             "Ref": "AWS::AccountId"
                                         },
-                                        "db:*"
+                                        "log-group:/aws/lambda/*"
                                     ]
                                 ]
                             }
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "rds:AddTagsToResource",
-                                "rds:RemoveTagsFromResource",
-                                "rds:StartDBCluster",
-                                "rds:StopDBCluster"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Join": [
-                                        ":",
-                                        [
-                                            "arn:aws:rds:*",
-                                            {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "cluster:*"
-                                        ]
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "ec2:StartInstances",
-                                "ec2:StopInstances",
-                                "ec2:CreateTags",
-                                "ec2:DeleteTags"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Join": [
-                                        ":",
-                                        [
-                                            "arn:aws:ec2:*",
-                                            {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "instance/*"
-                                        ]
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": "sns:Publish",
-                            "Resource": [
-                                {
-                                    "Ref": "InstanceSchedulerSnsTopic"
-                                }
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "lambda:InvokeFunction"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Join": [
-                                        ":",
-                                        [
-                                            "arn:aws:lambda",
-                                            {
-                                                "Ref": "AWS::Region"
-                                            },
-                                            {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "function",
-                                            {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    [
-                                                        {
-                                                            "Ref": "AWS::StackName"
-                                                        },
-                                                        "InstanceSchedulerMain"
-                                                    ]
-                                                ]
-                                            }
-                                        ]
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "kms:GenerateDataKey*",
-                                "kms:Decrypt"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::GetAtt": [
-                                        "InstanceSchedulerEncryptionKey",
-                                        "Arn"
-                                    ]
-                                }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "rds:DeleteDBSnapshot",
+                            "rds:DescribeDBSnapshots",
+                            "rds:StopDBInstance"
+                        ],
+                        "Resource": {
+                            "Fn::Join": [
+                                ":",
+                                [
+                                    "arn:aws:rds:*",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    "snapshot:*"
+                                ]
                             ]
                         }
-                    ]
-                }
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "rds:AddTagsToResource",
+                            "rds:RemoveTagsFromResource",
+                            "rds:DescribeDBSnapshots",
+                            "rds:StartDBInstance",
+                            "rds:StopDBInstance"
+                        ],
+                        "Resource": {
+                            "Fn::Join": [
+                                ":",
+                                [
+                                    "arn:aws:rds:*",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    "db:*"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "rds:AddTagsToResource",
+                            "rds:RemoveTagsFromResource",
+                            "rds:StartDBCluster",
+                            "rds:StopDBCluster"
+                        ],
+                        "Resource": [
+                            {
+                                "Fn::Join": [
+                                    ":",
+                                    [
+                                        "arn:aws:rds:*",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        "cluster:*"
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "redshift:DeleteTags",
+                            "redshift:CreateTags",
+                            "redshift:DescribeClusters",
+                            "redshift:DescribeTags",
+                            "redshift:PauseCluster",
+                            "redshift:ResumeCluster"
+                        ],
+                        "Resource": [
+                            {
+                                "Fn::Join": [
+                                    ":",
+                                    [
+                                        "arn:aws:redshift:*",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        "cluster:*"
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ec2:StartInstances",
+                            "ec2:StopInstances",
+                            "ec2:CreateTags",
+                            "ec2:DeleteTags"
+                        ],
+                        "Resource": [
+                            {
+                                "Fn::Join": [
+                                    ":",
+                                    [
+                                        "arn:aws:ec2:*",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        "instance/*"
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:DeleteItem",
+                            "dynamodb:GetItem",
+                            "dynamodb:PutItem",
+                            "dynamodb:Query",
+                            "dynamodb:Scan",
+                            "dynamodb:BatchWriteItem"
+                        ],
+                        "Resource": [
+                            {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::Join": [
+                                                ":",
+                                                [
+                                                    "arn:aws:dynamodb",
+                                                    {
+                                                        "Ref": "AWS::Region"
+                                                    },
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    "table/"
+                                                ]
+                                            ]
+                                        },
+                                        {
+                                            "Ref": "StateTable"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::Join": [
+                                                ":",
+                                                [
+                                                    "arn:aws:dynamodb",
+                                                    {
+                                                        "Ref": "AWS::Region"
+                                                    },
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    "table/"
+                                                ]
+                                            ]
+                                        },
+                                        {
+                                            "Ref": "ConfigTable"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": "sns:Publish",
+                        "Resource": [
+                            {
+                                "Ref": "InstanceSchedulerSnsTopic"
+                            }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "lambda:InvokeFunction"
+                        ],
+                        "Resource": [
+                            {
+                                "Fn::Join": [
+                                    ":",
+                                    [
+                                        "arn:aws:lambda",
+                                        {
+                                            "Ref": "AWS::Region"
+                                        },
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        "function",
+                                        {
+                                            "Fn::Join": [
+                                                "-",
+                                                [
+                                                    {
+                                                        "Ref": "AWS::StackName"
+                                                    },
+                                                    "InstanceSchedulerMain"
+                                                ]
+                                            ]
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:DescribeLogStreams",
+
+                            "rds:DescribeDBClusters",
+                            "rds:DescribeDBInstances",
+
+                            "ec2:DescribeInstances",
+                            "ec2:DescribeRegions",
+                            "ec2:ModifyInstanceAttribute",
+
+                            "cloudwatch:PutMetricData",
+
+                            "ssm:GetParameter",
+                            "ssm:GetParameters",
+                            "ssm:DescribeMaintenanceWindows",
+                            "ssm:DescribeMaintenanceWindowExecutions",
+
+                            "tag:GetResources",
+                            "sts:AssumeRole"
+                        ],
+                        "Resource": [
+                            "*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "kms:GenerateDataKey*",
+                            "kms:Decrypt"
+                        ],
+                        "Resource": [
+                            {
+                                "Fn::GetAtt": [
+                                    "InstanceSchedulerEncryptionKey",
+                                    "Arn"
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
             }
         },
         "SchedulerRole": {
@@ -1226,14 +1188,7 @@
                         "KeyType": "RANGE"
                     }
                 ],
-                "BillingMode": "PAY_PER_REQUEST",
-                "SSESpecification": {
-                    "SSEType": "KMS",
-                    "SSEEnabled": "True",
-                    "KMSMasterKeyId": {
-                        "Ref": "InstanceSchedulerEncryptionKey"
-                    }
-                }
+                "BillingMode": "PAY_PER_REQUEST"
             }
         },
         "ConfigTable": {
@@ -1259,43 +1214,7 @@
                         "KeyType": "RANGE"
                     }
                 ],
-                "BillingMode": "PAY_PER_REQUEST",
-                "SSESpecification": {
-                    "SSEType": "KMS",
-                    "SSEEnabled": "True",
-                    "KMSMasterKeyId": {
-                        "Ref": "InstanceSchedulerEncryptionKey"
-                    }
-                }
-            }
-        },
-        "MaintenanceWindowTable": {
-            "Type": "AWS::DynamoDB::Table",
-            "Properties": {
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "Name",
-                        "AttributeType": "S"
-                    }
-                ],
-                "KeySchema": [
-                    {
-                        "AttributeName": "Name",
-                        "KeyType": "HASH"
-                    }
-                ],
-                "BillingMode": "PAY_PER_REQUEST",
-                "SSESpecification": {
-                    "SSEType": "KMS",
-                    "SSEEnabled": "True",
-                    "KMSMasterKeyId": {
-                        "Ref": "InstanceSchedulerEncryptionKey"
-                    }
-                },
-                "TimeToLiveSpecification": {
-                    "AttributeName": "TimeToLive",
-                    "Enabled": "TRUE"
-                }
+                "BillingMode": "PAY_PER_REQUEST"
             }
         },
         "SchedulerLogGroup": {
@@ -1337,6 +1256,7 @@
                             "id": "W58",
                             "reason": "All policies have been scoped to be as restrictive as possible. This lambda function has access to write logs."
                         }
+
                     ]
                 }
             },
@@ -1364,7 +1284,7 @@
                             ]
                         ]
                     },
-                    "S3Key": "%solution%/%version%/instance-scheduler.zip"
+                    "S3Key": "instance-scheduler.zip"
                 },
                 "Handler": "main.lambda_handler",
                 "Runtime": "python3.7",
@@ -1379,11 +1299,8 @@
                         "CONFIG_TABLE": {
                             "Ref": "ConfigTable"
                         },
-                        "MAINTENANCE_WINDOW_TABLE": {
-                            "Ref": "MaintenanceWindowTable"
-                        },
-                        "SCHEDULER_FREQUENCY": {
-                            "Ref": "SchedulerFrequency"
+                        "SCHEDULER_FREQUENCY" : {
+                            "Ref" : "SchedulerFrequency"
                         },
                         "TAG_NAME": {
                             "Ref": "TagName"
@@ -1461,8 +1378,7 @@
                 "Description": "EC2 and RDS instance scheduler, version %version%"
             },
             "DependsOn": [
-                "SchedulerPolicy",
-                "EC2DynamoDBPolicy"
+                "SchedulerPolicy"
             ]
         },
         "SchedulerInvokePermission": {
@@ -1699,4 +1615,3 @@
         }
     }
 }
-
